@@ -97,14 +97,33 @@ defmodule Scry.Document.Executor do
   end
 
   def run(%Query{} = query, %Conn{data: document}, params) do
-    pseudo_items = extract_pseudo_items(query.select)
+    with {:ok, matches} <- resolve_source(document, query.source, deep?(query)) do
+      if extract_pseudo_items(query.select) == [] do
+        # No PARENT/SIBLINGS/ANCESTORS anywhere in this query's own
+        # top-level select -- nothing document-specific to do.
+        # Delegating wholesale, unmodified query included, is the
+        # correctness-critical path here: GROUP BY/aggregation only
+        # works correctly when `run_flat/3` sees every row belonging
+        # to a group *at once* -- the marker-per-row technique `order_
+        # and_limit/3`/`project_all/3` need is only ever safe for a
+        # non-grouped, row-for-row correspondence (confirmed by a
+        # real, caught-by-test regression: an ordinary `GROUP BY` with
+        # no pseudo items at all silently miscounted under the marker
+        # path, since it necessarily processes one row at a time and
+        # never lets `run_flat/3` see the whole group).
+        rows = Enum.map(matches, fn {_key, row} -> row end)
 
-    with :ok <- validate_pseudo_usage(query, pseudo_items),
-         {:ok, matches} <- resolve_source(document, query.source, deep?(query)),
-         {:ok, ordered} <- order_and_limit(matches, query, params) do
-      case project_all(ordered, query.select, document) do
-        {:ok, rows} -> {:ok, Cursor.new(rows)}
-        {:error, _reason} = error -> error
+        with {:ok, enumerable} <- QueryOps.run_flat(rows, query, params) do
+          {:ok, Cursor.new(enumerable)}
+        end
+      else
+        with :ok <- validate_no_grouping(query),
+             {:ok, ordered} <- order_and_limit(matches, query, params) do
+          case project_all(ordered, query.select, document) do
+            {:ok, rows} -> {:ok, Cursor.new(rows)}
+            {:error, _reason} = error -> error
+          end
+        end
       end
     end
   end
@@ -112,12 +131,8 @@ defmodule Scry.Document.Executor do
   defp deep?(%Query{variant: %{select_ep1a: :deep}}), do: true
   defp deep?(_query), do: false
 
-  defp validate_pseudo_usage(%Query{group_mode: :plain, group_bys: []}, _pseudo_items), do: :ok
-  defp validate_pseudo_usage(_query, []), do: :ok
-
-  defp validate_pseudo_usage(_query, _pseudo_items) do
-    {:error, {:unsupported, :pseudo_field_with_group_by}}
-  end
+  defp validate_no_grouping(%Query{group_bys: []}), do: :ok
+  defp validate_no_grouping(_query), do: {:error, {:unsupported, :pseudo_field_with_group_by}}
 
   defp resolve_source(document, source, false) do
     case Map.fetch(document, source) do

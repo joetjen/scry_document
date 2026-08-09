@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Scry.Document.Executor.run/3` silently miscounted an ordinary `GROUP BY` query with no `PARENT`/`SIBLINGS`/`ANCESTORS` at all** -- found building `scry_graph`'s own, structurally identical executor, not caught by this package's own original test suite. Any query with no pseudo item unconditionally routed through the per-row marker/projection path meant for resolving pseudo-fields, which can only ever see one row at a time -- `GROUP BY category { category, count: count(category) }` over two same-category rows returned `count: 1`, not `2`, since `Scry.Core.QueryOps.run_flat/3` never saw both rows together. Fixed by delegating wholesale to `run_flat/3` (unmodified query included) whenever the top-level select has no pseudo items at all; the marker/per-row path now only ever runs when one is actually present, where it was already correct (a pseudo-field alongside `GROUP BY` is, and remains, an explicit `{:error, {:unsupported, :pseudo_field_with_group_by}}` rather than either miscounting or guessing). New regression test in `test/scry/document/executor_test.exs`.
+
 ### Added
 
 - Initial project scaffold: `mix.exs` (app `:scry_document`, `{:scry_core, path: "../scry_core"}` + direct `ichor`/`ichor_runtime` dependencies since this package does its own grammar parsing/analysis/dispatch, matching `scry_time_series`'s own precedent), `.credo.exs`/`.formatter.exs`/`.tool-versions`, `AGENTS.md`/`CLAUDE.md`.

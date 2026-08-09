@@ -223,6 +223,30 @@ defmodule Scry.Document.ExecutorTest do
       assert {:error, {:unsupported, :pseudo_field_with_group_by}} = Executor.run(query, conn)
     end
 
+    # Regression test for a real bug caught while building scry_graph's
+    # own, structurally identical executor: an ordinary GROUP BY with
+    # NO pseudo items at all must delegate wholesale to Scry.Core.
+    # QueryOps.run_flat/3, not the pseudo-field marker/per-row-
+    # projection path -- that path can only ever see one row at a
+    # time, so aggregation silently produced wrong counts (a `count()`
+    # of 2 rows in the same group came back as 1) before this was
+    # fixed.
+    test "an ordinary GROUP BY with no pseudo items at all still aggregates correctly" do
+      conn =
+        Conn.new(%{
+          ["nodes"] => [
+            %{"category" => "a", "title" => "x"},
+            %{"category" => "a", "title" => "y"}
+          ]
+        })
+
+      {:ok, query} =
+        Scry.Document.parse("SELECT nodes GROUP BY category { category, count: count(category) }")
+
+      assert {:ok, cursor} = Executor.run(query, conn)
+      assert Cursor.to_list(cursor) == [%{"category" => "a", "count" => 2}]
+    end
+
     test "a CombinedQuery (UNION/etc.) is declined explicitly this round" do
       conn = Conn.new(%{["a"] => [%{"x" => 1}], ["b"] => [%{"x" => 2}]})
       {:ok, query} = Scry.Document.parse("SELECT a { x } UNION SELECT b { x }")
