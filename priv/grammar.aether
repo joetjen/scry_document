@@ -1,0 +1,81 @@
+; This file is the hand-written SOURCE for a generated file:
+; `lib/scry/document/grammar/compiled.ex` (`Scry.Document.Grammar.
+; Compiled`, what `Scry.Document.parse/1` actually runs queries
+; through) is produced from this file (merged with core's own grammar)
+; by `priv/gen/generate_compiled_grammar.exs` -- after editing anything
+; below, run `mix run priv/gen/generate_compiled_grammar.exs` and
+; re-run the test suite; never hand-edit the generated file itself.
+;
+; scry_document's own grammar fragment (impl_spec.md §4) -- fills TWO
+; of core's extension points at once, not just one: `select_ep1a`
+; (lang_spec.md §8.3's `DEEP`) and `body_item_ep1` (§8.3's `PARENT`/
+; `SIBLINGS`/`ANCESTORS`). Both live in this one file/package since
+; they're all part of the same standard variant, the same way
+; scry_time_series's own single select_ep1a fill and this package's
+; two-extension-point fill are both "one kind's own grammar
+; contribution," just a bigger one here.
+;
+; `@root`/`@grammar` are both required pragmas per the Aether guide,
+; but both are discarded once merged with core (Scry.Core.GrammarCompose
+; .merge/2's own moduledoc: "keeping core's root/skip/engine/
+; case_insensitive"). `@root select_ep1a` here only satisfies Aether's
+; own eager per-file `@root` validation (it must name a rule that
+; exists in *this* file) -- it does NOT require `body_item_ep1` to be
+; reachable from it: `Scry.Document.Grammar.compile/0` never runs
+; `Grammar.Analysis.run/1` on this fragment standalone, only on the
+; merged whole (core's own real root, `document`, reaches both
+; extension points naturally through its own `select`/`body_item`
+; productions) -- confirmed against `Aether.Reader`/`Aether.Eval`'s own
+; source, the same investigation that grounded scry_time_series's own
+; identical comment.
+@grammar "scry_document"
+@root select_ep1a
+@case_insensitive
+@skip TRIVIA
+
+; Structurally identical to core's own (priv/grammar.aether in
+; scry_core) -- required locally to satisfy Aether's eager per-file
+; `@skip` validation, discarded at merge time in favor of core's own
+; copy (Scry.Core.GrammarCompose's own moduledoc has the full "why").
+COMMENT := "#" (!"\n" .)*
+TRIVIA  := (SPACE | COMMENT)*
+
+; `DEEP` -- lang_spec.md §8.3's EP1(a) header modifier, nominated
+; position "before WHERE" (the same position `LAST` nominates, §8.2 --
+; mutually exclusive by kind, never both on the same query, exactly the
+; union-of-simultaneous-contributions design `select_ep1a`'s own
+; comment in scry_core's grammar already documents). Unlike `LAST`,
+; `DEEP` is a bare keyword with no arguments at all -- lang_spec.md
+; gives it no `<duration>`/`<field>` the way `LAST` has; `Scry.Document.
+; Actions`' own `select_ep1a` handler tags the result the bare atom
+; `:deep`, not a payload tuple. `Scry.Document.Executor` (not `Scry.
+; Core.Executor`, which stays completely unaware `DEEP` exists at all)
+; is what actually interprets this -- see its own moduledoc for what
+; "recursive descent, vs. one child level" (lang_spec.md's own phrase)
+; concretely means for a real query.
+select_ep1a := KW_DEEP
+
+KW_DEEP := "deep"
+
+; `PARENT { <body> }`/`SIBLINGS { <body> }`/`ANCESTORS { <body> }` --
+; lang_spec.md §8.3's EP1(c) "scoped pseudo-field" shapes, the XPath
+; `parent::`/sibling-axis/`ancestor::` equivalents. Fills core's
+; `body_item_ep1` extension point the same way `Scry.Core.
+; GrammarComposeTest`'s own `@graph_like_fragment` fixture already
+; proved safe for `VIA`'s EP1(b) shape -- `inner:body_list` is an
+; ordinary dangling reference to core's own real `body_list` rule,
+; resolved only once this fragment is merged with core, not a
+; fragment-local copy of it, so a pseudo-field's own body can contain
+; anything an ordinary nested SELECT's body can (plain fields, nested
+; SELECTs, even another PARENT/SIBLINGS/ANCESTORS). No target/argument
+; before the brace, unlike `VIA edge { ... }` -- lang_spec.md's own
+; syntax column (`PARENT { <body> }`) has no leading identifier.
+body_item_ep1 := parent_field | siblings_field | ancestors_field
+
+parent_field := KW_PARENT LBRACE inner:body_list RBRACE
+siblings_field := KW_SIBLINGS LBRACE inner:body_list RBRACE
+ancestors_field := KW_ANCESTORS LBRACE inner:body_list RBRACE
+
+KW_PARENT := "parent"
+KW_SIBLINGS := "siblings"
+KW_ANCESTORS := "ancestors"
