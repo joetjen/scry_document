@@ -31,7 +31,7 @@ defmodule Scry.Document.MixProject do
       # from, even though it's still genuinely present and compiled in
       # this (`:test`) env, and `Scry.Document.Grammar`/the generator
       # script still reference its types/functions directly.
-      dialyzer: [plt_add_apps: [:mix, :ichor]]
+      dialyzer: [plt_add_apps: [:mix, :ichor], ignore_warnings: ".dialyzer_ignore.exs"]
     ]
   end
 

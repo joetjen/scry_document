@@ -95,9 +95,11 @@ defmodule Scry.DocumentTest do
       assert [{:field, ["title"]}, {:variant, {:parent, _}}, %Query{source: ["other"]}] = q.select
     end
 
-    # Commas added between body items -- comma-on-newline is a known,
-    # separately-tracked gap in core's own grammar (scry_core's own
-    # body_list comment), not something this package introduces or fixes.
+    # Commas added between body items -- no longer required since core's
+    # body_list gained a newline-suffices separator (scry_core lang_spec.md
+    # §6); kept here as a still-valid, comma-explicit rendering of the
+    # worked example. See grammar_parity_test.exs for a verbatim,
+    # no-commas-at-all case exercising the newline-only form.
     test "the lang_spec.md §8.3 worked example, with explicit commas between body items" do
       assert {:ok, %Query{} = q} =
                Scry.Document.parse(~s"""

@@ -30,8 +30,7 @@ defmodule Scry.Document.GrammarParityTest do
     {"ANCESTORS alone", "SELECT nodes { title, ANCESTORS { region } }"},
     {"PARENT + SIBLINGS + ANCESTORS together",
      "SELECT nodes { title, PARENT { category }, SIBLINGS { category }, ANCESTORS { region } }"},
-    {"the lang_spec.md §8.3 worked example, commas added (comma-on-newline is a known, " <>
-       "separately-tracked core grammar gap -- this package's own README notes it)",
+    {"the lang_spec.md §8.3 worked example, commas added",
      ~s"""
      SELECT library.catalog.shelves.shelf.books.book
          WHERE price > 30 AND available = true LIMIT 5
@@ -42,7 +41,26 @@ defmodule Scry.Document.GrammarParityTest do
      }
      """},
     {"block comment (via a commented-out WITH decl) before a DEEP query",
-     ";with x = SELECT y { z }\nSELECT metric DEEP { value }"}
+     ";with x = SELECT y { z }\nSELECT metric DEEP { value }"},
+    {"the lang_spec.md §8.3 worked example verbatim, no commas at all -- " <>
+       "core's newline-suffices body_list separator, through this package's own EP1(c) body items",
+     ~s"""
+     SELECT library.catalog.shelves.shelf.books.book
+         WHERE price > 30 AND available = true LIMIT 5
+     {
+         title
+         PARENT { PARENT { category } }
+         ANCESTORS { region }
+     }
+     """},
+    {"a trailing comma before the closing brace, mixed with a bare-newline-separated item",
+     ~s"""
+     SELECT nodes {
+         title,
+         PARENT { category }
+         SIBLINGS { category },
+     }
+     """}
   ]
 
   for {label, query} <- @queries do

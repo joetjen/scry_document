@@ -83,13 +83,12 @@ Scry.Core.Cursor.to_list(cursor)
 #    "ancestors" => [%{"region" => nil}, %{"region" => nil}, %{"region" => nil}, %{"region" => nil}, %{"region" => "north"}]}]
 ```
 
-Note the commas between `title`/`PARENT { ... }`/`ANCESTORS { ... }`
-above — a known, separately-tracked gap in *core's own* grammar
-(`scry_core/priv/grammar.aether`'s own `body_list` comment: a comma is
-required between body items even across a line break in this Phase 1
-grammar), not something this package introduces or could fix on its
-own. `lang_spec.md`'s own §8.3 worked example omits them and doesn't
-actually parse as written today.
+The commas between `title`/`PARENT { ... }`/`ANCESTORS { ... }` above
+are shown for clarity but no longer required — core's own `body_list`
+grammar now accepts a bare newline as an item separator too (a comma
+is still always valid, and a trailing comma before the closing `}` is
+now permitted as well). `lang_spec.md`'s own §8.3 worked example, which
+omits the commas, now parses as written.
 
 **Nesting one pseudo-field inside another wraps, it doesn't flatten**
 — `PARENT { PARENT { category } }` produces `%{"parent" => %{"parent"

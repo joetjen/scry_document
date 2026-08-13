@@ -215,6 +215,10 @@ defmodule Scry.Document.Executor do
 
   defp project_ordinary(_row, []), do: {:ok, %{}}
 
+  # The `QueryOps.run_flat/3` call just below is `.dialyzer_ignore.exs`'s
+  # own `:call` entry -- a confirmed dialyzer false positive (verified
+  # this exact struct literal round-trips correctly at runtime), see
+  # that file's own comment for the full explanation.
   defp project_ordinary(row, select) do
     flat_query = %Query{
       source: nil,

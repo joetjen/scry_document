@@ -271,10 +271,10 @@ defmodule Scry.Document.ExecutorTest do
           ]
         })
 
-      # Commas added between body items -- comma-on-newline is a known,
-      # separately-tracked gap in core's own grammar, not something
-      # this package introduces or fixes (see the parity test's own
-      # identical case for the citation).
+      # Commas added between body items -- no longer required since core's
+      # body_list gained a newline-suffices separator (scry_core
+      # lang_spec.md §6); kept here as a still-valid, comma-explicit
+      # rendering of the worked example.
       query_text = ~s"""
       SELECT library.catalog.shelves.shelf.books.book
           WHERE price > 30 AND available = true LIMIT 5
