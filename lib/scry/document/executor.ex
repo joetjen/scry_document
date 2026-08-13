@@ -59,9 +59,11 @@ defmodule Scry.Document.Executor do
       this round, not a silent truncation. `SIBLINGS` includes every
       row at every sibling key.
     * **Scope limit, stated rather than silently unsupported**: a
-      pseudo-field alongside `GROUP BY` returns `{:error, {:unsupported,
-      :pseudo_field_with_group_by}}` -- an aggregated/grouped result no
-      longer corresponds to one specific document node, and neither
+      pseudo-field *or a nested `SELECT`* alongside `GROUP BY` returns
+      `{:error, {:unsupported, :pseudo_field_with_group_by}}` (the atom
+      name predates nested `SELECT` support and is kept as-is rather
+      than churned) -- an aggregated/grouped result no longer
+      corresponds to one specific document node, and neither
       lang_spec.md nor impl_spec.md says what that combination should
       mean. `%Scry.Core.CombinedQuery{}` (`UNION`/etc.) similarly
       returns `{:error, {:unsupported, :combined_query}}` this round --
@@ -76,6 +78,36 @@ defmodule Scry.Document.Executor do
       surviving row -- `Scry.Document.Conn`'s own rows are never
       mutated; the field is added to a temporary copy and stripped
       back out before a result is ever returned.
+    * A nested `%Scry.Core.Query{}` body item -- Scry's own `JOIN`
+      equivalent -- is the one shape `run_flat/3` genuinely cannot
+      resolve at all (confirmed via a real `FunctionClauseError`, not
+      assumed; `Scry.Core.QueryOps.resolve_correlated_nested/5`'s own
+      moduledoc has the full story), found building `scry_reldoc`:
+      *any* query combining a nested `SELECT` with anything document-
+      specific -- or even with nothing document-specific at all, since
+      the old "no pseudo items" fast path handed the query to
+      `run_flat/3` completely unmodified -- crashed outright. Fixed via
+      `resolve_correlated_nested/5`, called with a `fetch_fn` that
+      recurses back into this module's own `run/3` (so a nested
+      `SELECT` may itself contain another nested `SELECT`, or this
+      package's own pseudo-fields, fully recursively). Correlation
+      always resolves against the *original, top-level* query's own
+      source name, even when this recurses into a `PARENT`/`SIBLINGS`/
+      `ANCESTORS` body -- correlating to anything else from inside a
+      pseudo-field's own nested body is a real, stated scope limit
+      (lang_spec.md/impl_spec.md define no correlation semantics for
+      that position at all), not silently wrong.
+    * **`own_name` (the correlation anchor) is always `List.last(query.
+      source)`, one segment only** -- a genuine, pre-existing `scry_core`
+      limit (`Scry.Core.QueryOps.run_document/4`'s own moduledoc: "not
+      a two-or-more-segment path under the ancestor"), confirmed the
+      hard way here: a document source is very often multi-segment
+      (`catalog.fiction`), but correlating a nested `SELECT` against it
+      must still write only the *last* segment (`WHERE book_id =
+      fiction.id`, not `WHERE book_id = catalog.fiction.id`) -- the
+      full multi-segment form silently fails to correlate at all
+      (resolves as an ordinary, missing field instead, surfacing as a
+      null-safety error rather than a clear "didn't correlate" one).
   """
 
   alias Scry.Core.{Cursor, Query, QueryOps}
@@ -96,36 +128,54 @@ defmodule Scry.Document.Executor do
     {:error, {:unsupported, :combined_query}}
   end
 
-  def run(%Query{} = query, %Conn{data: document}, params) do
+  def run(%Query{} = query, %Conn{data: document} = conn, params) do
     with {:ok, matches} <- resolve_source(document, query.source, deep?(query)) do
-      if extract_pseudo_items(query.select) == [] do
-        # No PARENT/SIBLINGS/ANCESTORS anywhere in this query's own
-        # top-level select -- nothing document-specific to do.
-        # Delegating wholesale, unmodified query included, is the
-        # correctness-critical path here: GROUP BY/aggregation only
-        # works correctly when `run_flat/3` sees every row belonging
-        # to a group *at once* -- the marker-per-row technique `order_
-        # and_limit/3`/`project_all/3` need is only ever safe for a
-        # non-grouped, row-for-row correspondence (confirmed by a
-        # real, caught-by-test regression: an ordinary `GROUP BY` with
-        # no pseudo items at all silently miscounted under the marker
-        # path, since it necessarily processes one row at a time and
-        # never lets `run_flat/3` see the whole group).
+      if special_items?(query.select) do
+        with :ok <- validate_no_grouping(query),
+             {:ok, ordered} <- order_and_limit(matches, query, params) do
+          own_name = List.last(query.source)
+
+          case project_all(ordered, query.select, conn, own_name, params) do
+            {:ok, rows} -> {:ok, Cursor.new(rows)}
+            {:error, _reason} = error -> error
+          end
+        end
+      else
+        # Neither a PARENT/SIBLINGS/ANCESTORS pseudo-field nor a nested
+        # SELECT anywhere in this query's own top-level select --
+        # nothing document-specific to do. Delegating wholesale,
+        # unmodified query included, is the correctness-critical path
+        # here: GROUP BY/aggregation only works correctly when `run_flat/3`
+        # sees every row belonging to a group *at once* -- the
+        # marker-per-row technique `order_and_limit/3`/`project_all/3`
+        # need is only ever safe for a non-grouped, row-for-row
+        # correspondence (confirmed by a real, caught-by-test
+        # regression: an ordinary `GROUP BY` with no special items at
+        # all silently miscounted under the marker path, since it
+        # necessarily processes one row at a time and never lets
+        # `run_flat/3` see the whole group).
         rows = Enum.map(matches, fn {_key, row} -> row end)
 
         with {:ok, enumerable} <- QueryOps.run_flat(rows, query, params) do
           {:ok, Cursor.new(enumerable)}
         end
-      else
-        with :ok <- validate_no_grouping(query),
-             {:ok, ordered} <- order_and_limit(matches, query, params) do
-          case project_all(ordered, query.select, document) do
-            {:ok, rows} -> {:ok, Cursor.new(rows)}
-            {:error, _reason} = error -> error
-          end
-        end
       end
     end
+  end
+
+  # A bare nested `%Scry.Core.Query{}` body item needs the identical
+  # per-row marker path a pseudo-field does -- `run_flat/3` cannot
+  # resolve one at all (`Scry.Core.QueryOps.resolve_correlated_nested/5`'s
+  # own moduledoc has the full "confirmed via a real FunctionClauseError"
+  # story; found empirically that this bit even a query with *no*
+  # pseudo-field at all, since the old fast path called `run_flat/3`
+  # with the query completely unmodified, nested SELECT included).
+  defp special_items?(body_items) do
+    Enum.any?(body_items, fn
+      {:variant, {kind, _body}} when kind in [:parent, :siblings, :ancestors] -> true
+      %Query{} -> true
+      _other -> false
+    end)
   end
 
   defp deep?(%Query{variant: %{select_ep1a: :deep}}), do: true
@@ -182,9 +232,9 @@ defmodule Scry.Document.Executor do
     end
   end
 
-  defp project_all(ordered, select, document) do
+  defp project_all(ordered, select, conn, own_name, params) do
     ordered
-    |> Enum.map(fn {key, row} -> project_body(key, row, select, document) end)
+    |> Enum.map(fn {key, row} -> project_body(key, row, select, conn, own_name, params) end)
     |> Enum.split_with(&match?({:error, _}, &1))
     |> case do
       {[], oks} -> {:ok, Enum.map(oks, fn {:ok, row} -> row end)}
@@ -193,33 +243,67 @@ defmodule Scry.Document.Executor do
   end
 
   # Projects one already-resolved `{key, row}` against `body` -- plain
-  # fields/nested SELECTs/etc. delegate to `Scry.Core.QueryOps.run_flat/3`
-  # exactly as `project_all/3`'s own caller does (no WHERE/ORDER/LIMIT
-  # here -- a pseudo-field's own `{ <body> }` has no clause syntax of
-  # its own, lang_spec.md §8.3's own grammar column confirms this),
+  # fields delegate to `Scry.Core.QueryOps.run_flat/3` (no WHERE/ORDER/
+  # LIMIT here -- a pseudo-field's own `{ <body> }` has no clause syntax
+  # of its own, lang_spec.md §8.3's own grammar column confirms this),
+  # a nested `%Scry.Core.Query{}` body item resolves via `Scry.Core.
+  # QueryOps.resolve_correlated_nested/5` (that function's own moduledoc
+  # has the full "why `run_flat/3` alone can't do this" story), and
   # `PARENT`/`SIBLINGS`/`ANCESTORS` resolve recursively through this
-  # same function, one level relative to `key`.
-  defp project_body(key, row, body, document) do
+  # same function, one level relative to `key`. `own_name` is always
+  # the *original, top-level* query's own source name, unchanged as
+  # this recurses into a pseudo-field's own nested body -- correlation
+  # inside a `PARENT`/`SIBLINGS`/`ANCESTORS` body referencing something
+  # other than the true top-level source is a real, stated scope limit,
+  # not silently wrong: lang_spec.md/impl_spec.md define no correlation
+  # semantics for that position at all, and `run_document/4`'s own
+  # identical "immediate enclosing query only" limit is the closest
+  # existing precedent.
+  defp project_body(key, row, body, conn, own_name, params) do
     pseudo_items = extract_pseudo_items(body)
-    ordinary_select = strip_pseudo_items(body)
 
-    with {:ok, base} <- project_ordinary(row, ordinary_select) do
+    {nested_items, flat_select} =
+      body |> strip_pseudo_items() |> Enum.split_with(&is_struct(&1, Query))
+
+    with {:ok, base} <- project_ordinary(row, flat_select, params),
+         {:ok, with_nested} <- add_nested_results(base, nested_items, row, conn, own_name, params) do
       resolved =
-        Enum.reduce(pseudo_items, base, fn {output_key, kind, nested_body}, acc ->
-          Map.put(acc, output_key, resolve_pseudo_field(kind, nested_body, key, document))
+        Enum.reduce(pseudo_items, with_nested, fn {output_key, kind, nested_body}, acc ->
+          Map.put(
+            acc,
+            output_key,
+            resolve_pseudo_field(kind, nested_body, key, conn, own_name, params)
+          )
         end)
 
       {:ok, resolved}
     end
   end
 
-  defp project_ordinary(_row, []), do: {:ok, %{}}
+  defp add_nested_results(base, [], _row, _conn, _own_name, _params), do: {:ok, base}
+
+  defp add_nested_results(base, nested_items, row, conn, own_name, params) do
+    Enum.reduce_while(nested_items, {:ok, base}, fn nested, {:ok, acc} ->
+      fetch_fn = fn q, p ->
+        with {:ok, cursor} <- run(q, conn, p) do
+          {:ok, Cursor.to_list(cursor)}
+        end
+      end
+
+      case QueryOps.resolve_correlated_nested(nested, row, own_name, params, fetch_fn) do
+        {:ok, rows} -> {:cont, {:ok, Map.put(acc, List.last(nested.source), rows)}}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+  end
+
+  defp project_ordinary(_row, [], _params), do: {:ok, %{}}
 
   # The `QueryOps.run_flat/3` call just below is `.dialyzer_ignore.exs`'s
   # own `:call` entry -- a confirmed dialyzer false positive (verified
   # this exact struct literal round-trips correctly at runtime), see
   # that file's own comment for the full explanation.
-  defp project_ordinary(row, select) do
+  defp project_ordinary(row, select, params) do
     flat_query = %Query{
       source: nil,
       wheres: [],
@@ -237,7 +321,7 @@ defmodule Scry.Document.Executor do
       type_decls: %{}
     }
 
-    case QueryOps.run_flat([row], flat_query, %{}) do
+    case QueryOps.run_flat([row], flat_query, params) do
       {:ok, enumerable} ->
         case Enum.to_list(enumerable) do
           [projected] -> {:ok, projected}
@@ -266,37 +350,37 @@ defmodule Scry.Document.Executor do
     end)
   end
 
-  defp resolve_pseudo_field(:parent, body, key, document) do
+  defp resolve_pseudo_field(:parent, body, key, conn, own_name, params) do
     case parent_key(key) do
       nil -> nil
-      parent_key -> project_first(parent_key, body, document)
+      parent_key -> project_first(parent_key, body, conn, own_name, params)
     end
   end
 
-  defp resolve_pseudo_field(:siblings, body, key, document) do
+  defp resolve_pseudo_field(:siblings, body, key, conn, own_name, params) do
     parent = parent_key(key)
 
-    document
+    conn.data
     |> Enum.filter(fn {k, _rows} -> k != key and parent_key(k) == parent end)
     |> Enum.sort_by(fn {k, _rows} -> k end)
     |> Enum.flat_map(fn {sibling_key, rows} ->
       Enum.map(rows, fn row ->
-        {:ok, projected} = project_body(sibling_key, row, body, document)
+        {:ok, projected} = project_body(sibling_key, row, body, conn, own_name, params)
         projected
       end)
     end)
   end
 
-  defp resolve_pseudo_field(:ancestors, body, key, document) do
+  defp resolve_pseudo_field(:ancestors, body, key, conn, own_name, params) do
     key
     |> ancestor_keys()
-    |> Enum.map(&project_first(&1, body, document))
+    |> Enum.map(&project_first(&1, body, conn, own_name, params))
   end
 
-  defp project_first(key, body, document) do
-    case Map.fetch(document, key) do
+  defp project_first(key, body, conn, own_name, params) do
+    case Map.fetch(conn.data, key) do
       {:ok, [row | _rest]} ->
-        {:ok, projected} = project_body(key, row, body, document)
+        {:ok, projected} = project_body(key, row, body, conn, own_name, params)
         projected
 
       _absent ->

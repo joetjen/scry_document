@@ -213,6 +213,86 @@ defmodule Scry.Document.ExecutorTest do
     end
   end
 
+  describe "a nested SELECT (relational correlation), a real gap found building scry_reldoc" do
+    test "resolves correctly with no pseudo-field in the same body at all" do
+      conn =
+        Conn.new(%{
+          ["books"] => [%{"id" => 1, "title" => "Book One"}, %{"id" => 2, "title" => "Book Two"}],
+          ["reviews"] => [%{"book_id" => 1, "stars" => 5}, %{"book_id" => 2, "stars" => 3}]
+        })
+
+      rows =
+        run!(
+          conn,
+          "SELECT books ORDER BY id { title, SELECT reviews WHERE book_id = books.id { stars } }"
+        )
+
+      assert rows == [
+               %{"title" => "Book One", "reviews" => [%{"stars" => 5}]},
+               %{"title" => "Book Two", "reviews" => [%{"stars" => 3}]}
+             ]
+    end
+
+    test "composes correctly alongside PARENT, in the same body" do
+      conn =
+        Conn.new(%{
+          ["catalog"] => [%{"name" => "Catalog"}],
+          ["catalog", "fiction"] => [%{"id" => 1, "title" => "Book One"}],
+          ["reviews"] => [%{"book_id" => 1, "stars" => 5}]
+        })
+
+      # Correlation only ever matches against the *last* segment of the
+      # enclosing query's own source (`own_name`, `run_document/4`'s own
+      # documented "not a two-or-more-segment path under the ancestor"
+      # limit -- confirmed the hard way, a real query using the full
+      # `catalog.fiction.id` path here silently failed to correlate at
+      # all, comparing against a genuinely missing field instead) -- so
+      # `fiction.id`, not `catalog.fiction.id`, is the correct/only way
+      # to correlate against a multi-segment document source.
+      rows =
+        run!(
+          conn,
+          "SELECT catalog.fiction { title, PARENT { name }, SELECT reviews WHERE book_id = fiction.id { stars } }"
+        )
+
+      assert rows == [
+               %{
+                 "title" => "Book One",
+                 "parent" => %{"name" => "Catalog"},
+                 "reviews" => [%{"stars" => 5}]
+               }
+             ]
+    end
+
+    test "an unmatched correlation yields an empty nested list, not an error" do
+      conn =
+        Conn.new(%{
+          ["books"] => [%{"id" => 1, "title" => "Book One"}],
+          ["reviews"] => [%{"book_id" => 999, "stars" => 5}]
+        })
+
+      rows =
+        run!(conn, "SELECT books { title, SELECT reviews WHERE book_id = books.id { stars } }")
+
+      assert rows == [%{"title" => "Book One", "reviews" => []}]
+    end
+
+    test "a nested SELECT combined with GROUP BY is declined explicitly, not silently miscounted" do
+      conn =
+        Conn.new(%{
+          ["books"] => [%{"id" => 1, "category" => "a"}],
+          ["reviews"] => [%{"book_id" => 1, "stars" => 5}]
+        })
+
+      {:ok, query} =
+        Scry.Document.parse(
+          "SELECT books GROUP BY category { category, SELECT reviews WHERE book_id = books.id { stars } }"
+        )
+
+      assert {:error, {:unsupported, :pseudo_field_with_group_by}} = Executor.run(query, conn)
+    end
+  end
+
   describe "scope limits, stated as clear errors rather than undefined behavior" do
     test "a pseudo-field alongside GROUP BY is declined explicitly" do
       conn = Conn.new(%{["nodes"] => [%{"category" => "a", "title" => "x"}]})
