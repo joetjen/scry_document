@@ -1,7 +1,7 @@
 defmodule Scry.Document.Executor do
   @moduledoc """
   Runs a parsed document query against a `Scry.Document.Conn.t()` --
-  interprets `DEEP` (lang_spec.md §8.3's EP1(a) header modifier) and
+  interprets `DEEP` (§8.3's EP1(a) header modifier) and
   `PARENT`/`SIBLINGS`/`ANCESTORS` (its EP1(c) scoped pseudo-fields),
   neither of which `Scry.Core.Executor`/`Scry.Core.QueryOps` has any
   notion of.
@@ -29,7 +29,7 @@ defmodule Scry.Document.Executor do
     * `DEEP` present: resolves `query.source` (`[a, ..., z]`) against
       every stored key whose first segment is `a` and last segment is
       `z`, with any number of segments in between -- confirmed with the
-      project owner as the intended reading of lang_spec.md's own
+      project owner as the intended reading of the
       "recursive descent, vs. one child level" phrase (XPath `//`
       semantics). A single-segment source matches every key whose own
       *last* segment equals it (there's no "first segment" to also
@@ -48,8 +48,8 @@ defmodule Scry.Document.Executor do
       body item, wrapping whatever its own body projects to under its
       own name, the same way any other body item would -- there's
       nothing pseudo-field-specific about that rule, so nothing
-      special-cases it away when one is nested inside another. lang_spec.md
-      §8.3's own worked example never states an expected output shape,
+      special-cases it away when one is nested inside another. The
+      §8.3 worked example never states an expected output shape,
       so this is a deliberate, documented reading of an otherwise-open
       question, not an inferred requirement.
     * A key holding more than one row is a real, supported shape
@@ -64,7 +64,7 @@ defmodule Scry.Document.Executor do
       name predates nested `SELECT` support and is kept as-is rather
       than churned) -- an aggregated/grouped result no longer
       corresponds to one specific document node, and neither
-      lang_spec.md nor impl_spec.md says what that combination should
+      spec says what that combination should
       mean. `%Scry.Core.CombinedQuery{}` (`UNION`/etc.) similarly
       returns `{:error, {:unsupported, :combined_query}}` this round --
       not the focal capability of this package's own first real build.
@@ -95,7 +95,7 @@ defmodule Scry.Document.Executor do
       source name, even when this recurses into a `PARENT`/`SIBLINGS`/
       `ANCESTORS` body -- correlating to anything else from inside a
       pseudo-field's own nested body is a real, stated scope limit
-      (lang_spec.md/impl_spec.md define no correlation semantics for
+      (neither spec defines correlation semantics for
       that position at all), not silently wrong.
     * **`own_name` (the correlation anchor) is always `List.last(query.
       source)`, one segment only** -- a genuine, pre-existing `scry_core`
@@ -245,7 +245,7 @@ defmodule Scry.Document.Executor do
   # Projects one already-resolved `{key, row}` against `body` -- plain
   # fields delegate to `Scry.Core.QueryOps.run_flat/3` (no WHERE/ORDER/
   # LIMIT here -- a pseudo-field's own `{ <body> }` has no clause syntax
-  # of its own, lang_spec.md §8.3's own grammar column confirms this),
+  # of its own, the §8.3 grammar column confirms this),
   # a nested `%Scry.Core.Query{}` body item resolves via `Scry.Core.
   # QueryOps.resolve_correlated_nested/5` (that function's own moduledoc
   # has the full "why `run_flat/3` alone can't do this" story), and
@@ -255,7 +255,7 @@ defmodule Scry.Document.Executor do
   # this recurses into a pseudo-field's own nested body -- correlation
   # inside a `PARENT`/`SIBLINGS`/`ANCESTORS` body referencing something
   # other than the true top-level source is a real, stated scope limit,
-  # not silently wrong: lang_spec.md/impl_spec.md define no correlation
+  # not silently wrong: neither spec defines correlation
   # semantics for that position at all, and `run_document/4`'s own
   # identical "immediate enclosing query only" limit is the closest
   # existing precedent.

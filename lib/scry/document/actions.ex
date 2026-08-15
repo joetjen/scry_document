@@ -3,7 +3,7 @@ defmodule Scry.Document.Actions do
   Turns the *merged* (core + this package's own fragment) parse tree
   into a `%Scry.Core.Query{}`, the exact same target `Scry.Core.Actions`
   produces alone -- this module owns exactly the rules `priv/grammar.
-  aether` adds (`select_ep1a` for lang_spec.md §8.3's `DEEP`, and
+  aether` adds (`select_ep1a` for §8.3's `DEEP`, and
   `body_item_ep1`/`parent_field`/`siblings_field`/`ancestors_field` for
   `PARENT`/`SIBLINGS`/`ANCESTORS`) and delegates every other rule/token
   straight through to `Scry.Core.Actions`'s own functions, the same
@@ -43,7 +43,7 @@ defmodule Scry.Document.Actions do
       end
   end
 
-  # lang_spec.md §8.3: bare `DEEP`, EP1(a) header modifier, nominated
+  # §8.3: bare `DEEP`, EP1(a) header modifier, nominated
   # position "before where" -- the same position `LAST` (time-series)
   # nominates, mutually exclusive by kind, never both on one query.
   # Unlike `LAST`, `DEEP` takes no arguments at all (`select_ep1a :=
@@ -65,7 +65,7 @@ defmodule Scry.Document.Actions do
   def handle_rule(:body_item_ep1, %{ancestors_field: cap}, ctx), do: cap.eval.(ctx)
 
   # `PARENT { <body> }`/`SIBLINGS { <body> }`/`ANCESTORS { <body> }` --
-  # lang_spec.md §8.3's EP1(c) scoped pseudo-fields, the XPath
+  # §8.3's EP1(c) scoped pseudo-fields, the XPath
   # `parent::`/sibling-axis/`ancestor::` equivalents. `inner:body_list`
   # evaluates through core's own real `body_list`/`body_item` handlers
   # (this package contributes no body-item evaluation logic of its own

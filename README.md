@@ -1,7 +1,6 @@
 # scry_document
 
-The `document` kind for [Scry](https://github.com/joetjen/scry)
-(lang_spec.md §8.3) — a `scry_<kind>` package (impl_spec.md §2), the
+The `document` kind for Scry — a `scry_<kind>` package, the
 second real one built against
 [`scry_core`](https://github.com/joetjen/scry_core)'s EP1/EP2
 extension-point composition machinery, and the first to fill *two*
@@ -14,7 +13,7 @@ real package had exercised before this one; only a fixture fragment in
 
 ## Scope and two real findings from building this
 
-**`DEEP`'s own execution semantics aren't specified in lang_spec.md**
+**`DEEP`'s own execution semantics aren't fully specified**
 beyond "recursive descent, vs. one child level," with no worked
 example ever using it. Decided directly with this repo's own
 maintainer, not inferred: `DEEP` means XPath `//` semantics — `SELECT
@@ -33,9 +32,8 @@ multi-segment source today. So this package reuses the *exact* existing
 has, just letting keys have more than one segment and treating segment
 order as tree position — no new storage primitive, a data convention
 instead (`Scry.Document.Conn`'s own moduledoc has the full reasoning).
-There's no real document-store adapter for this kind yet either
-(`impl_spec.md` §6 names no day-one product for it) — `Scry.Document.
-Executor` operates directly against a `Scry.Document.Conn.t()` rather
+There's no real document-store adapter for this kind yet either —
+`Scry.Document.Executor` operates directly against a `Scry.Document.Conn.t()` rather
 than dispatching through `Scry.Core.EngineBehaviour`, since no existing
 behaviour callback receives the whole keyed document space `DEEP`/
 `PARENT`/`SIBLINGS`/`ANCESTORS` all need.
@@ -46,8 +44,8 @@ document node — neither spec says what that should mean) and
 `%Scry.Core.CombinedQuery{}` (`UNION`/etc.) both return a clear
 `{:error, {:unsupported, ...}}` rather than an undefined result.
 
-Source: <https://github.com/joetjen/scry_document>. Specs live in the
-separate [`scry`](https://github.com/joetjen/scry) repository; the
+Source: <https://github.com/joetjen/scry_document>. Specs lived in the
+separate `scry` repository; the
 composition machinery this composes against lives in
 [`scry_core`](https://github.com/joetjen/scry_core).
 
@@ -87,7 +85,7 @@ The commas between `title`/`PARENT { ... }`/`ANCESTORS { ... }` above
 are shown for clarity but no longer required — core's own `body_list`
 grammar now accepts a bare newline as an item separator too (a comma
 is still always valid, and a trailing comma before the closing `}` is
-now permitted as well). `lang_spec.md`'s own §8.3 worked example, which
+now permitted as well). The §8.3 worked example, which
 omits the commas, now parses as written.
 
 **Nesting one pseudo-field inside another wraps, it doesn't flatten**

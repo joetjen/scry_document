@@ -1,7 +1,6 @@
 defmodule Scry.Document do
   @moduledoc """
-  The `document` kind for [Scry](https://github.com/joetjen/scry)
-  (lang_spec.md §8.3) -- `DEEP` (an EP1(a) header modifier, recursive
+  The `document` kind for Scry -- `DEEP` (an EP1(a) header modifier, recursive
   descent through a hierarchical source) and `PARENT`/`SIBLINGS`/
   `ANCESTORS` (EP1(c) scoped pseudo-fields, the XPath `parent::`/
   sibling-axis/`ancestor::` equivalents) only. This package's own

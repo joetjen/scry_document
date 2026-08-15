@@ -3,7 +3,7 @@ defmodule Scry.DocumentTest do
 
   alias Scry.Core.{CombinedQuery, Query}
 
-  test "DEEP, the lang_spec.md §8.3 EP1(a) header modifier -- a bare keyword, no arguments" do
+  test "DEEP, the §8.3 EP1(a) header modifier -- a bare keyword, no arguments" do
     assert {:ok, %Query{} = q} = Scry.Document.parse("SELECT metric DEEP { value }")
     assert q.variant == %{select_ep1a: :deep}
   end
@@ -32,7 +32,7 @@ defmodule Scry.DocumentTest do
     assert {:error, _} = Scry.Document.parse("SELECT metric WHERE value > 1 DEEP { value }")
   end
 
-  describe "PARENT/SIBLINGS/ANCESTORS -- lang_spec.md §8.3's EP1(c) scoped pseudo-fields" do
+  describe "PARENT/SIBLINGS/ANCESTORS -- §8.3's EP1(c) scoped pseudo-fields" do
     test "PARENT wraps as {:variant, {:parent, body}} inside select, via core's own body_item wrapping" do
       assert {:ok, %Query{} = q} =
                Scry.Document.parse("SELECT nodes { title, PARENT { category } }")
@@ -96,11 +96,11 @@ defmodule Scry.DocumentTest do
     end
 
     # Commas added between body items -- no longer required since core's
-    # body_list gained a newline-suffices separator (scry_core lang_spec.md
+    # body_list gained a newline-suffices separator (scry_core
     # §6); kept here as a still-valid, comma-explicit rendering of the
     # worked example. See grammar_parity_test.exs for a verbatim,
     # no-commas-at-all case exercising the newline-only form.
-    test "the lang_spec.md §8.3 worked example, with explicit commas between body items" do
+    test "the §8.3 worked example, with explicit commas between body items" do
       assert {:ok, %Query{} = q} =
                Scry.Document.parse(~s"""
                SELECT library.catalog.shelves.shelf.books.book
@@ -154,7 +154,7 @@ defmodule Scry.DocumentTest do
     assert q.variant == %{select_ep1a: :deep}
   end
 
-  describe "Scry.Core.TypeCheck's category check (lang_spec.md §7)" do
+  describe "Scry.Core.TypeCheck's category check (§7)" do
     test "a source declared TYPE ...: relational using DEEP is a compile-time error, same as LAST" do
       assert {:error, {:kind_category_mismatch, "metric", "relational", [:select_ep1a]}} =
                Scry.Document.parse(
@@ -169,17 +169,16 @@ defmodule Scry.DocumentTest do
                )
     end
 
-    # A real, verified scope gap in scry_core's own category check, not
-    # something this package can or should paper over: the check only
-    # ever inspects query.variant (an EP1(a) header modifier's own
-    # slot) -- PARENT/SIBLINGS/ANCESTORS live inside query.select as
-    # {:variant, {..., body}} tagged body items instead, which the
-    # check never looks at. Confirmed directly against Scry.Core.
-    # TypeCheck's own source (`kind in @degenerate_kinds and map_size
-    # (variant) > 0`), not assumed -- so this is documented as the
-    # honest current behavior, not asserted to be caught when it isn't.
-    test "PARENT on a TYPE ...: relational source is NOT caught -- a known scry_core scope gap, EP1(c) body items aren't inspected by the category check" do
-      assert {:ok, %Query{}} =
+    # scry_core's own category check now also catches this: its
+    # cross-kind check walks query.select's {:variant, {tag, body}}
+    # tagged body items too (not just query.variant, the EP1(a) header
+    # modifier slot DEEP alone uses), via a hardcoded tag-to-kind
+    # registry that includes :parent/:siblings/:ancestors as
+    # "document"-kind tags. Confirmed directly against Scry.Core.
+    # TypeCheck's own source, not assumed -- this closes what was
+    # previously a known, documented scope gap in that check.
+    test "PARENT on a TYPE ...: relational source is caught by the cross-kind category check" do
+      assert {:error, {:kind_category_mismatch, "nodes", "relational", [:parent]}} =
                Scry.Document.parse(
                  "TYPE nodes: relational { title: String } SELECT nodes { title, PARENT { category } }"
                )

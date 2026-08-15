@@ -51,8 +51,7 @@ defmodule Scry.Document.MixProject do
       # its own grammar fragment against core's own unanalyzed grammar
       # (Scry.Core.Grammar.compile_unanalyzed/0, Scry.Core.GrammarCompose.
       # merge/2), so it's the real dependency, not test-only. Switch to
-      # a `~> x.y` Hex requirement once scry_core is actually published
-      # (impl_spec.md's own dependency-versions convention).
+      # a `~> x.y` Hex requirement once scry_core is actually published.
       {:scry_core, path: "../scry_core"},
 
       # === ICHOR (grammar compiler) ===
@@ -111,7 +110,7 @@ defmodule Scry.Document.MixProject do
   end
 
   defp description do
-    "The document kind for Scry (lang_spec.md §8.3) -- grammar fragment and composition " <>
+    "The document kind for Scry -- grammar fragment and composition " <>
       "against scry_core for DEEP/PARENT/SIBLINGS/ANCESTORS, plus a real Scry.Document.Executor."
   end
 

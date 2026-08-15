@@ -3,8 +3,8 @@ defmodule Scry.Document.GrammarParityTest do
   A permanent regression guard for the equivalence between `Grammar.VM`
   (interpreted) and `Scry.Document.Grammar.Compiled` (native codegen)
   for the *merged* core+document grammar specifically -- composition,
-  not just a single grammar file, is the part `impl_spec.md` itself
-  flags as most likely to surface a real divergence, and this package
+  not just a single grammar file, is the part most likely to surface
+  a real divergence, and this package
   fills *two* extension points at once (`select_ep1a`/`body_item_ep1`),
   not just one the way `scry_time_series` does. See `scry_core`'s own
   identical test for the single-grammar case, and `scry_time_series`'s
@@ -30,7 +30,7 @@ defmodule Scry.Document.GrammarParityTest do
     {"ANCESTORS alone", "SELECT nodes { title, ANCESTORS { region } }"},
     {"PARENT + SIBLINGS + ANCESTORS together",
      "SELECT nodes { title, PARENT { category }, SIBLINGS { category }, ANCESTORS { region } }"},
-    {"the lang_spec.md §8.3 worked example, commas added",
+    {"the §8.3 worked example, commas added",
      ~s"""
      SELECT library.catalog.shelves.shelf.books.book
          WHERE price > 30 AND available = true LIMIT 5
@@ -42,7 +42,7 @@ defmodule Scry.Document.GrammarParityTest do
      """},
     {"block comment (via a commented-out WITH decl) before a DEEP query",
      ";with x = SELECT y { z }\nSELECT metric DEEP { value }"},
-    {"the lang_spec.md §8.3 worked example verbatim, no commas at all -- " <>
+    {"the §8.3 worked example verbatim, no commas at all -- " <>
        "core's newline-suffices body_list separator, through this package's own EP1(c) body items",
      ~s"""
      SELECT library.catalog.shelves.shelf.books.book

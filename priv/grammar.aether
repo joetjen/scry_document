@@ -6,9 +6,9 @@
 ; below, run `mix run priv/gen/generate_compiled_grammar.exs` and
 ; re-run the test suite; never hand-edit the generated file itself.
 ;
-; scry_document's own grammar fragment (impl_spec.md §4) -- fills TWO
+; scry_document's own grammar fragment (§4) -- fills TWO
 ; of core's extension points at once, not just one: `select_ep1a`
-; (lang_spec.md §8.3's `DEEP`) and `body_item_ep1` (§8.3's `PARENT`/
+; (§8.3's `DEEP`) and `body_item_ep1` (§8.3's `PARENT`/
 ; `SIBLINGS`/`ANCESTORS`). Both live in this one file/package since
 ; they're all part of the same standard variant, the same way
 ; scry_time_series's own single select_ep1a fill and this package's
@@ -40,25 +40,25 @@
 COMMENT := "#" (!"\n" .)*
 TRIVIA  := (SPACE | COMMENT)*
 
-; `DEEP` -- lang_spec.md §8.3's EP1(a) header modifier, nominated
+; `DEEP` -- §8.3's EP1(a) header modifier, nominated
 ; position "before WHERE" (the same position `LAST` nominates, §8.2 --
 ; mutually exclusive by kind, never both on the same query, exactly the
 ; union-of-simultaneous-contributions design `select_ep1a`'s own
 ; comment in scry_core's grammar already documents). Unlike `LAST`,
-; `DEEP` is a bare keyword with no arguments at all -- lang_spec.md
-; gives it no `<duration>`/`<field>` the way `LAST` has; `Scry.Document.
+; `DEEP` is a bare keyword with no arguments at all -- there is no
+; `<duration>`/`<field>` the way `LAST` has; `Scry.Document.
 ; Actions`' own `select_ep1a` handler tags the result the bare atom
 ; `:deep`, not a payload tuple. `Scry.Document.Executor` (not `Scry.
 ; Core.Executor`, which stays completely unaware `DEEP` exists at all)
 ; is what actually interprets this -- see its own moduledoc for what
-; "recursive descent, vs. one child level" (lang_spec.md's own phrase)
+; "recursive descent, vs. one child level"
 ; concretely means for a real query.
 select_ep1a := KW_DEEP
 
 KW_DEEP := "deep"
 
 ; `PARENT { <body> }`/`SIBLINGS { <body> }`/`ANCESTORS { <body> }` --
-; lang_spec.md §8.3's EP1(c) "scoped pseudo-field" shapes, the XPath
+; §8.3's EP1(c) "scoped pseudo-field" shapes, the XPath
 ; `parent::`/sibling-axis/`ancestor::` equivalents. Fills core's
 ; `body_item_ep1` extension point the same way `Scry.Core.
 ; GrammarComposeTest`'s own `@graph_like_fragment` fixture already
@@ -68,7 +68,7 @@ KW_DEEP := "deep"
 ; fragment-local copy of it, so a pseudo-field's own body can contain
 ; anything an ordinary nested SELECT's body can (plain fields, nested
 ; SELECTs, even another PARENT/SIBLINGS/ANCESTORS). No target/argument
-; before the brace, unlike `VIA edge { ... }` -- lang_spec.md's own
+; before the brace, unlike `VIA edge { ... }` -- the
 ; syntax column (`PARENT { <body> }`) has no leading identifier.
 body_item_ep1 := parent_field | siblings_field | ancestors_field
 

@@ -1,7 +1,7 @@
 defmodule Scry.Document.Conn do
   @moduledoc """
   The document tree `Scry.Document.Executor.run/3` reads from -- a
-  reference structure, not a real backing adapter (`impl_spec.md` §6
+  reference structure, not a real backing adapter (§6
   lists no document-store product as a day-one build target yet; this
   package's own README/CHANGELOG have the full "why no `scry_engine_*`
   package this round" reasoning).

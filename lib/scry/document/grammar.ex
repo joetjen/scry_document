@@ -3,7 +3,7 @@ defmodule Scry.Document.Grammar do
   Compiles this package's own `priv/grammar.aether` fragment, merges it
   with core's own grammar (`Scry.Core.Grammar.compile_unanalyzed/0` +
   `Scry.Core.GrammarCompose.merge/2`), and analyzes the result --
-  `impl_spec.md` §4's own composition mechanics, exercised here for the
+  §4's own composition mechanics, exercised here for the
   first time by a real, separate package filling **two** extension
   points at once (`select_ep1a` for `DEEP`, `body_item_ep1` for
   `PARENT`/`SIBLINGS`/`ANCESTORS`), where `scry_time_series` only ever

@@ -4,7 +4,7 @@ defmodule Scry.Document.ExecutorTest do
   `Scry.Document.parse/1` alone only proves these constructs parse
   into the right AST; this file proves `Scry.Document.Executor.run/3`
   actually interprets them correctly against a real (if hand-built)
-  document tree, including the `lang_spec.md` §8.3 worked example run
+  document tree, including the §8.3 worked example run
   for real, not just traced by hand.
   """
 
@@ -335,7 +335,7 @@ defmodule Scry.Document.ExecutorTest do
     end
   end
 
-  describe "the lang_spec.md §8.3 worked example, run for real" do
+  describe "the §8.3 worked example, run for real" do
     test "WHERE + LIMIT + PARENT (nested) + ANCESTORS, exactly as the spec's own query reads" do
       conn =
         Conn.new(%{
@@ -353,7 +353,7 @@ defmodule Scry.Document.ExecutorTest do
 
       # Commas added between body items -- no longer required since core's
       # body_list gained a newline-suffices separator (scry_core
-      # lang_spec.md §6); kept here as a still-valid, comma-explicit
+      # §6); kept here as a still-valid, comma-explicit
       # rendering of the worked example.
       query_text = ~s"""
       SELECT library.catalog.shelves.shelf.books.book
